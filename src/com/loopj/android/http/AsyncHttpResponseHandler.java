@@ -21,6 +21,8 @@ package com.loopj.android.http;
 import android.os.Handler;
 import android.os.Looper;
 import android.os.Message;
+
+import org.apache.http.Header;
 import org.apache.http.HttpEntity;
 import org.apache.http.HttpResponse;
 import org.apache.http.StatusLine;
@@ -70,6 +72,7 @@ public class AsyncHttpResponseHandler {
     protected static final int FAILURE_MESSAGE = 1;
     protected static final int START_MESSAGE = 2;
     protected static final int FINISH_MESSAGE = 3;
+    protected static final int HEADER_MESSAGE = 4;
 
     private Handler handler;
 
@@ -133,7 +136,16 @@ public class AsyncHttpResponseHandler {
         // By default, call the deprecated onFailure(Throwable) for compatibility
         onFailure(error);
     }
-
+    
+    /**
+     * Fired when receive response headers.
+     * @param statusCode
+     * @param responseBody
+     */
+    public void onReceiveHeaders(Header[] headers)
+    {
+    	
+    }
 
     //
     // Pre-processing of messages (executes in background threadpool thread)
@@ -159,6 +171,9 @@ public class AsyncHttpResponseHandler {
         sendMessage(obtainMessage(FINISH_MESSAGE, null));
     }
 
+    protected void sendHeaderMessage(Header[] headers) {
+        sendMessage(obtainMessage(HEADER_MESSAGE, headers));
+    }
 
     //
     // Pre-processing of messages (in original calling thread, typically the UI thread)
@@ -172,6 +187,9 @@ public class AsyncHttpResponseHandler {
         onFailure(e, responseBody);
     }
 
+    protected void handleHeaderMessage(Header[] headers) {
+        onReceiveHeaders(headers);
+    }
 
 
     // Methods which emulate android's Handler and Message methods
@@ -186,6 +204,10 @@ public class AsyncHttpResponseHandler {
             case FAILURE_MESSAGE:
                 response = (Object[])msg.obj;
                 handleFailureMessage((Throwable)response[0], (String)response[1]);
+                break;
+            case HEADER_MESSAGE:
+                response = (Object[])msg.obj;
+                handleHeaderMessage((Header[]) response);
                 break;
             case START_MESSAGE:
                 onStart();
@@ -220,6 +242,11 @@ public class AsyncHttpResponseHandler {
     void sendResponseMessage(HttpResponse response) {
         StatusLine status = response.getStatusLine();
         String responseBody = null;
+        
+        // send header message first
+        Header[] headers = response.getAllHeaders();
+        sendHeaderMessage(headers);
+        
         try {
             HttpEntity entity = null;
             HttpEntity temp = response.getEntity();
